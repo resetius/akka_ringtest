@@ -4,10 +4,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.collection.mutable.ListBuffer
 
-// Сообщение для пинга
 case object PingMessage
 
-// Конфигурация узла
 case class NodeConfig(host: String, port: Int, nodeId: Int)
 
 class PingActor(isFirstNode: Boolean,
@@ -19,10 +17,16 @@ class PingActor(isFirstNode: Boolean,
   private var lastPercent = -1
   private var startTime = 0L
   private val systemName = "DistributedSystem"
+  private var nextSel : ActorSelection = _
 
   override def postStop(): Unit = {
-    // На не‑первом узле после остановки акторсистемы
     if (!isFirstNode) context.system.terminate()
+  }
+
+  override def preStart(): Unit = {
+    nextSel = context.actorSelection(
+      s"akka://$systemName@${nextConfig.host}:${nextConfig.port}/user/pingActor"
+    )
   }
 
   def receive: Receive = {
@@ -32,12 +36,8 @@ class PingActor(isFirstNode: Boolean,
         startTime = System.nanoTime()
       }
 
-      // Если первый узел и осталось 0 сообщений — ничего не делаем
       if (!(isFirstNode && remaining == 0)) {
-        // Отправляем следующему в кольце
-        val remotePath =
-          s"akka://$systemName@${nextConfig.host}:${nextConfig.port}/user/pingActor"
-        context.actorSelection(remotePath) ! PingMessage
+        nextSel ! PingMessage
 
         if (isFirstNode) {
           remaining -= 1
@@ -45,12 +45,10 @@ class PingActor(isFirstNode: Boolean,
           if (remaining == 0) {
             val secs = (System.nanoTime() - startTime) / 1e9
             println(f"\nPing throughput: ${totalMessages / secs}%.2f msg/s")
-            // Завершаем всех узлов
             allConfigs.foreach { cfg =>
               val p = s"akka://$systemName@${cfg.host}:${cfg.port}/user/pingActor"
               context.actorSelection(p) ! PoisonPill
             }
-            // Закрываем локальную систему
             context.system.terminate()
           }
         }
@@ -81,7 +79,6 @@ object DistributedMain extends App {
   val totalMessages = 100000
   val nodeConfigs = ListBuffer.empty[NodeConfig]
 
-  // Парсинг аргументов
   args.sliding(2, 2).toList.foreach {
     case Array("--node", hp) =>
       hp.split(":") match {
@@ -106,7 +103,6 @@ object DistributedMain extends App {
   val isFirst = sorted.head.nodeId == myNodeId
   val myCfg  = sorted(idx)
 
-  // Конфиг для Akka-remote
   val configStr = s"""
 akka {
   actor {
@@ -127,7 +123,9 @@ akka {
       canonical.port = ${myCfg.port}
       bind.hostname = "${myCfg.host}"
       bind.port = ${myCfg.port}
-      advanced.stream-idle-timeout = infinite
+      advanced {
+        stop-idle-outbound-after = 30 minutes
+      }
     }
   }
 }
