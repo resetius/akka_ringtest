@@ -18,6 +18,7 @@ class PingActor(isFirstNode: Boolean,
   private var startTime = 0L
   private val systemName = "DistributedSystem"
   private var nextSel : ActorSelection = _
+  private var nextRef : ActorRef = _
 
   override def postStop(): Unit = {
     if (!isFirstNode) context.system.terminate()
@@ -37,7 +38,11 @@ class PingActor(isFirstNode: Boolean,
       }
 
       if (!(isFirstNode && remaining == 0)) {
-        nextSel ! PingMessage
+        if (nextRef == null) {
+            nextRef = Await.result(nextSel.resolveOne(5.seconds), 5.seconds)
+        }
+ 
+        nextRef ! PingMessage
 
         if (isFirstNode) {
           remaining -= 1
@@ -76,6 +81,7 @@ class PingActor(isFirstNode: Boolean,
 object DistributedMain extends App {
   var myNodeId    = 1
   var delayMs     = 5000
+  var inflight    = 2
   val totalMessages = 100000
   val nodeConfigs = ListBuffer.empty[NodeConfig]
 
@@ -89,6 +95,7 @@ object DistributedMain extends App {
       }
     case Array("--node-id", id) => myNodeId = id.toInt
     case Array("--delay", d)   => delayMs = d.toInt
+    case Array("--inflight", d) => inflight = d.toInt
     case _ =>
   }
 
@@ -143,7 +150,9 @@ akka {
     system.scheduler.scheduleOnce(delayMs.milliseconds) {
       val path = s"akka://DistributedSystem@${myCfg.host}:${myCfg.port}/user/pingActor"
       System.err.println(s"Sending first ping to $path")
-      system.actorSelection(path) ! PingMessage
+      for (i <- 0 until inflight) {
+        system.actorSelection(path) ! PingMessage
+      }
     }
   }
 

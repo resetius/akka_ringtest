@@ -1,6 +1,7 @@
 #!/bin/bash
 
 N=${1:-10}  # Number of nodes
+INFL=${2:-2}
 BASE_PORT=2001
 
 sbt assembly
@@ -24,4 +25,4 @@ done
 
 # Run first node in foreground
 echo "Starting node 1 in foreground"
-$CMD --node-id 1 $NODE_ARGS
+$CMD --inflight $INFL --node-id 1 $NODE_ARGS
