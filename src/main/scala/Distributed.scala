@@ -17,6 +17,7 @@ class PingActor(isFirstNode: Boolean,
   private var lastPercent = -1
   private var startTime = 0L
   private val systemName = "DistributedSystem"
+  private var timerStarted = false
   private var nextSel : ActorSelection = _
   private var nextRef : ActorRef = _
 
@@ -32,8 +33,9 @@ class PingActor(isFirstNode: Boolean,
 
   def receive: Receive = {
     case PingMessage =>
-      if (isFirstNode && remaining == totalMessages) {
+      if (isFirstNode && !timerStarted) {
         println("Starting pinging...")
+        timerStarted = true
         startTime = System.nanoTime()
       }
 
@@ -45,7 +47,9 @@ class PingActor(isFirstNode: Boolean,
         nextRef ! PingMessage
 
         if (isFirstNode) {
-          remaining -= 1
+          if (sender() != context.system.deadLetters) {
+            remaining -= 1
+          }
           printProgress()
           if (remaining == 0) {
             val secs = (System.nanoTime() - startTime) / 1e9
