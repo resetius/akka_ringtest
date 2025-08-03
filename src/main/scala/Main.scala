@@ -10,12 +10,14 @@ class RingActor(idx: Int, N: Int, M: Int, ring: ListBuffer[ActorRef]) extends Ac
   private var remain = M
   private var lastPercent = -1
   private var startTime = 0L
+  private var timerStarted = false
 
   def receive: Receive = {
     case Next =>
       // Record start time on first message by actor 0
-      if (idx == 0 && remain == M) {
+      if (idx == 0 && !timerStarted) {
         startTime = System.nanoTime()
+        timerStarted = true
       }
       // If actor 0 has completed all rounds, stop handling further
       if (!(idx == 0 && remain == 0)) {
@@ -23,7 +25,9 @@ class RingActor(idx: Int, N: Int, M: Int, ring: ListBuffer[ActorRef]) extends Ac
         ring((idx + 1) % N) ! Next
 
         if (idx == 0) {
-          remain -= 1
+          if (sender() != context.system.deadLetters) {
+            remain -= 1
+          }
           printProgress()
           if (remain == 0) {
             shutdownRing()
@@ -64,12 +68,14 @@ object Main extends App {
   var N = 2        // Default number of actors
   var M = 100      // Default number of messages
   var mode = "throughput"
+  var inflight = 1
 
   // Parse command-line arguments
   args.sliding(2, 2).toList.collect {
     case Array("--actors", actors)   => N = actors.toInt
     case Array("--messages", msgs)   => M = msgs.toInt
     case Array("--mode", m)          => mode = m
+    case Array("--batch", batch)     => inflight = batch.toInt
   }
 
   if (mode == "throughput") {
@@ -84,7 +90,9 @@ object Main extends App {
     }
 
     // Kick off the ring
-    ringRefs(0) ! Next
+    for (i <- 0 until inflight) {
+      ringRefs(0) ! Next
+    }
 
     // Wait for termination after shutdown
     Await.ready(system.whenTerminated, Duration.Inf)
