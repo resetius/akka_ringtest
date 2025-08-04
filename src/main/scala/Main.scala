@@ -56,7 +56,7 @@ class RingActor(idx: Int, N: Int, M: Int, ring: ListBuffer[ActorRef]) extends Ac
   private def shutdownRing(): Unit = {
     val now = System.nanoTime()
     val secs = (now - startTime) / 1e9
-    println(f"\nRing throughput: ${(N.toLong * M) / secs}%.2f msg/s")
+    println(f"\nRing throughput: ${M / secs}%.2f msg/s")
     // Poison all actors to stop them
     ring.foreach(_ ! PoisonPill)
     // Terminate the actor system
