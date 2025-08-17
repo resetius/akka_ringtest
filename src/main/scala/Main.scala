@@ -56,7 +56,11 @@ class RingActor(idx: Int, N: Int, M: Int, ring: ListBuffer[ActorRef]) extends Ac
   private def shutdownRing(): Unit = {
     val now = System.nanoTime()
     val secs = (now - startTime) / 1e9
+<<<<<<< HEAD
     println(f"\nRing throughput: ${M / secs}%.2f msg/s")
+=======
+    println(f"\nRing throughput: ${(M) / secs}%.2f msg/s")
+>>>>>>> 96d468f (Single mode)
     // Poison all actors to stop them
     ring.foreach(_ ! PoisonPill)
     // Terminate the actor system
@@ -74,6 +78,7 @@ object Main extends App {
   args.sliding(2, 2).toList.collect {
     case Array("--actors", actors)   => N = actors.toInt
     case Array("--messages", msgs)   => M = msgs.toInt
+    case Array("--batch", str)       => batch = str.toInt
     case Array("--mode", m)          => mode = m
     case Array("--batch", batch)     => inflight = batch.toInt
   }
